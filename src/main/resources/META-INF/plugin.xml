@@ -1,0 +1,36 @@
+<idea-plugin>
+    <id>com.kutay.sshexplorer</id>
+    <name>SSH File Explorer</name>
+    <vendor>Kutay Aydogdu</vendor>
+
+    <description><![CDATA[
+        Connect to a remote host over SSH and browse its filesystem from a tool window
+        on the left side of the IDE.
+        <ul>
+            <li>SFTP based remote file tree with lazy loading</li>
+            <li>Double click a file to open it in the editor; saving uploads it back</li>
+            <li>Create / rename / delete / download / upload files and directories</li>
+            <li>Password or private key authentication, multiple saved connections</li>
+        </ul>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="SSH Explorer"
+                    anchor="left"
+                    icon="AllIcons.Nodes.Services"
+                    factoryClass="com.kutay.sshexplorer.ui.SshExplorerToolWindowFactory"/>
+
+        <applicationService serviceImplementation="com.kutay.sshexplorer.settings.SshConnectionSettings"/>
+        <projectService serviceImplementation="com.kutay.sshexplorer.ssh.SshConnectionService"/>
+        <applicationService serviceImplementation="com.kutay.sshexplorer.editor.RemoteFileEditingManager"/>
+
+        <notificationGroup id="SSH Explorer" displayType="BALLOON"/>
+    </extensions>
+
+    <applicationListeners>
+        <listener class="com.kutay.sshexplorer.editor.RemoteFileSaveListener"
+                  topic="com.intellij.openapi.fileEditor.FileDocumentManagerListener"/>
+    </applicationListeners>
+</idea-plugin>
