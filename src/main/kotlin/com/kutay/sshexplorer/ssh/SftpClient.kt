@@ -6,6 +6,7 @@ import com.jcraft.jsch.JSchException
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.SftpATTRS
 import com.jcraft.jsch.SftpException
+import com.jcraft.jsch.UserInfo
 import com.kutay.sshexplorer.model.RemoteFile
 import com.kutay.sshexplorer.settings.SshAuthType
 import com.kutay.sshexplorer.settings.SshConnectionConfig
@@ -16,6 +17,14 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 class SshOperationException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+/**
+ * The host is not in `known_hosts` yet. The connection was aborted on purpose —
+ * the caller must show [prompt] to the user and only retry with
+ * `trustUnknownHostKey = true` after an explicit confirmation.
+ */
+class UnknownHostKeyException(val prompt: String) :
+    RuntimeException("The host key of the server is not trusted yet.")
 
 /**
  * Thin, synchronous SFTP wrapper around a single JSch session.
@@ -32,7 +41,12 @@ class SftpClient(val config: SshConnectionConfig) {
     val isConnected: Boolean
         get() = lock.withLock { session?.isConnected == true && channel?.isConnected == true }
 
-    fun connect(secret: String?) = lock.withLock {
+    /**
+     * @param trustUnknownHostKey only pass `true` right after the user confirmed the
+     *   fingerprint reported by a previous [UnknownHostKeyException]; the key is then
+     *   written to `~/.ssh/known_hosts`.
+     */
+    fun connect(secret: String?, trustUnknownHostKey: Boolean = false) = lock.withLock {
         disconnectInternal()
         val jsch = JSch()
         loadKnownHosts(jsch)
@@ -42,7 +56,9 @@ class SftpClient(val config: SshConnectionConfig) {
             if (keyPath.isEmpty()) throw SshOperationException("No private key file configured.")
             if (!File(keyPath).isFile) throw SshOperationException("Private key not found: $keyPath")
             try {
-                if (secret.isNullOrEmpty()) jsch.addIdentity(keyPath) else jsch.addIdentity(keyPath, secret)
+                // The byte[] overloads are used because the String ones are deprecated in jsch.
+                if (secret.isNullOrEmpty()) jsch.addIdentity(keyPath)
+                else jsch.addIdentity(keyPath, secret.toByteArray(Charsets.UTF_8))
             } catch (e: JSchException) {
                 throw SshOperationException("Private key could not be read: ${e.message}", e)
             }
@@ -55,13 +71,16 @@ class SftpClient(val config: SshConnectionConfig) {
         }
 
         if (config.authType == SshAuthType.PASSWORD) {
-            newSession.setPassword(secret.orEmpty())
+            newSession.setPassword(secret.orEmpty().toByteArray(Charsets.UTF_8))
             newSession.setConfig("PreferredAuthentications", "password,keyboard-interactive")
         } else {
             newSession.setConfig("PreferredAuthentications", "publickey")
         }
-        // Unknown hosts are added on first use instead of failing the connection.
-        newSession.setConfig("StrictHostKeyChecking", "accept-new")
+        // An unknown host key never gets accepted silently: JSch asks, and the prompt is
+        // either answered by the user (trustUnknownHostKey) or turned into an exception.
+        newSession.setConfig("StrictHostKeyChecking", "ask")
+        val hostKeyPrompt = HostKeyPrompt(trustUnknownHostKey)
+        newSession.userInfo = hostKeyPrompt
         newSession.timeout = CONNECT_TIMEOUT_MS
 
         try {
@@ -72,8 +91,30 @@ class SftpClient(val config: SshConnectionConfig) {
             channel = sftp
         } catch (e: JSchException) {
             newSession.disconnect()
+            hostKeyPrompt.rejectedPrompt?.let { throw UnknownHostKeyException(it) }
             throw SshOperationException(describe(e), e)
         }
+    }
+
+    /**
+     * Answers JSch's host key question. Without a confirmation it records the prompt and
+     * says no, which aborts the handshake and leaves `known_hosts` untouched.
+     */
+    private class HostKeyPrompt(private val trusted: Boolean) : UserInfo {
+
+        var rejectedPrompt: String? = null
+            private set
+
+        override fun promptYesNo(message: String): Boolean {
+            if (!trusted) rejectedPrompt = message
+            return trusted
+        }
+
+        override fun getPassphrase(): String? = null
+        override fun getPassword(): String? = null
+        override fun promptPassword(message: String): Boolean = false
+        override fun promptPassphrase(message: String): Boolean = false
+        override fun showMessage(message: String) = Unit
     }
 
     fun disconnect() = lock.withLock { disconnectInternal() }
@@ -225,7 +266,12 @@ class SftpClient(val config: SshConnectionConfig) {
 
     private fun loadKnownHosts(jsch: JSch) {
         val knownHosts = File(System.getProperty("user.home"), ".ssh/known_hosts")
-        if (knownHosts.isFile) runCatching { jsch.setKnownHosts(knownHosts.absolutePath) }
+        // The path is registered even when the file is missing, otherwise a key the user
+        // just confirmed could not be persisted.
+        runCatching {
+            knownHosts.parentFile?.mkdirs()
+            jsch.setKnownHosts(knownHosts.absolutePath)
+        }
     }
 
     private fun describe(e: JSchException): String {
@@ -234,8 +280,8 @@ class SftpClient(val config: SshConnectionConfig) {
             message.contains("Auth fail", ignoreCase = true) ||
                 message.contains("Auth cancel", ignoreCase = true) ->
                 "Authentication failed for ${config.username}@${config.host}."
-            message.contains("UnknownHostKey", ignoreCase = true) ->
-                "Host key of ${config.host} is not trusted: $message"
+            message.contains("HostKey", ignoreCase = true) ->
+                "Host key of ${config.host} was rejected: $message"
             message.contains("timeout", ignoreCase = true) ->
                 "Connection to ${config.host}:${config.port} timed out."
             else -> "Cannot connect to ${config.host}:${config.port}: $message"

@@ -33,6 +33,12 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
+    compilerOptions {
+        // Without this Kotlin copies every default method of the platform interfaces into
+        // the implementing class, which the Plugin Verifier then reports as internal,
+        // deprecated and experimental API usage the plugin never actually wrote.
+        freeCompilerArgs.add("-jvm-default=no-compatibility")
+    }
 }
 
 java {
@@ -49,6 +55,14 @@ intellijPlatform {
         }
     }
     buildSearchableOptions = false
+
+    // Marketplace requires a Plugin Verifier run on every upload; keep it runnable locally
+    // with ./gradlew verifyPlugin.
+    pluginVerification {
+        ides {
+            recommended()
+        }
+    }
 }
 
 tasks {

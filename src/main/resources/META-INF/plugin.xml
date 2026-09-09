@@ -1,7 +1,7 @@
-<idea-plugin>
+<idea-plugin url="https://github.com/MorphyKutay/PHPStrom-SSH-File-explorer">
     <id>com.kutay.sshexplorer</id>
     <name>SSH File Explorer</name>
-    <vendor>Kutay Aydogdu</vendor>
+    <vendor url="https://github.com/MorphyKutay/PHPStrom-SSH-File-explorer" email="kutaynevzat2006@gmail.com">Kutay Aydogdu</vendor>
 
     <description><![CDATA[
         Connect to a remote host over SSH and browse its filesystem from a tool window
@@ -13,6 +13,18 @@
             <li>Password or private key authentication, multiple saved connections</li>
         </ul>
     ]]></description>
+
+    <change-notes><![CDATA[
+        <b>1.0.0</b>
+        <ul>
+            <li>First release.</li>
+            <li>SFTP tool window with a lazy loading remote file tree.</li>
+            <li>Open a remote file in the editor; saving uploads it back to the host.</li>
+            <li>Create, rename, delete, download and upload files and directories.</li>
+            <li>Password or OpenSSH private key authentication with multiple saved connections.</li>
+            <li>Unknown host keys are shown with their fingerprint and require explicit confirmation.</li>
+        </ul>
+    ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
 

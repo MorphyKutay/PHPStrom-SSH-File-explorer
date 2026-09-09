@@ -15,6 +15,7 @@ import com.intellij.util.ui.FormBuilder
 import com.kutay.sshexplorer.settings.SshAuthType
 import com.kutay.sshexplorer.settings.SshConnectionConfig
 import com.kutay.sshexplorer.ssh.SftpClient
+import com.kutay.sshexplorer.ssh.UnknownHostKeyException
 import java.awt.Dimension
 import javax.swing.JButton
 import javax.swing.JComboBox
@@ -127,28 +128,55 @@ class ConnectionDialog(
         }
         val probe = config.copy().also { applyTo(it) }
         val secret = String(secretField.password)
-        val error = ProgressManager.getInstance().runProcessWithProgressSynchronously<String?, Exception>({
-            val client = SftpClient(probe)
-            try {
-                client.connect(secret)
-                client.list(probe.rootPath)
-                null
-            } catch (e: Exception) {
-                e.message ?: e.javaClass.simpleName
-            } finally {
-                client.disconnect()
-            }
-        }, "Testing SSH Connection", true, project)
 
-        if (error == null) {
-            Messages.showInfoMessage(contentPanel, "Connected to ${probe.host} successfully.", "Connection OK")
+        // The first attempt never trusts an unknown host key; the retry only happens after
+        // the user confirmed the fingerprint, which cannot be asked from the progress thread.
+        val first = probeConnection(probe, secret, trustUnknownHostKey = false)
+        val result = if (first is ProbeResult.UntrustedHostKey) {
+            if (!confirmHostKey(project, first.prompt)) return
+            probeConnection(probe, secret, trustUnknownHostKey = true)
         } else {
-            Messages.showErrorDialog(contentPanel, error, "Connection Failed")
+            first
+        }
+
+        when (result) {
+            is ProbeResult.Ok ->
+                Messages.showInfoMessage(contentPanel, "Connected to ${probe.host} successfully.", "Connection OK")
+            is ProbeResult.UntrustedHostKey ->
+                Messages.showErrorDialog(contentPanel, HOST_KEY_NOT_STORED, "Connection Failed")
+            is ProbeResult.Failed ->
+                Messages.showErrorDialog(contentPanel, result.message, "Connection Failed")
         }
     }
+
+    private sealed interface ProbeResult {
+        object Ok : ProbeResult
+        class UntrustedHostKey(val prompt: String) : ProbeResult
+        class Failed(val message: String) : ProbeResult
+    }
+
+    private fun probeConnection(
+        probe: SshConnectionConfig,
+        secret: String,
+        trustUnknownHostKey: Boolean,
+    ): ProbeResult = ProgressManager.getInstance().runProcessWithProgressSynchronously<ProbeResult, Exception>({
+        val client = SftpClient(probe)
+        try {
+            client.connect(secret, trustUnknownHostKey)
+            client.list(probe.rootPath)
+            ProbeResult.Ok
+        } catch (e: UnknownHostKeyException) {
+            ProbeResult.UntrustedHostKey(e.prompt)
+        } catch (e: Exception) {
+            ProbeResult.Failed(e.message ?: e.javaClass.simpleName)
+        } finally {
+            client.disconnect()
+        }
+    }, "Testing SSH Connection", true, project)
 
     private companion object {
         const val AUTH_PASSWORD = "Password"
         const val AUTH_KEY = "Key pair (OpenSSH)"
+        const val HOST_KEY_NOT_STORED = "The confirmed host key could not be stored in ~/.ssh/known_hosts."
     }
 }

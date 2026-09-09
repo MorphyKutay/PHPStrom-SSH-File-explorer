@@ -33,6 +33,7 @@ import com.kutay.sshexplorer.settings.SshConnectionSettings
 import com.kutay.sshexplorer.ssh.SftpClient
 import com.kutay.sshexplorer.ssh.SshConnectionService
 import com.kutay.sshexplorer.ssh.SshNotifier
+import com.kutay.sshexplorer.ssh.UnknownHostKeyException
 import java.awt.BorderLayout
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
@@ -377,13 +378,20 @@ class SshExplorerPanel(private val project: Project) : SimpleToolWindowPanel(tru
             if (config.saveSecret && secret.isNotEmpty()) config.storeSecret(secret)
         }
 
-        val effectiveSecret = secret
+        connect(config, secret, trustUnknownHostKey = false)
+    }
+
+    private fun connect(config: SshConnectionConfig, secret: String?, trustUnknownHostKey: Boolean) {
         object : Task.Backgroundable(project, "Connecting to ${config.host}", true) {
             override fun run(indicator: ProgressIndicator) {
                 indicator.isIndeterminate = true
                 try {
-                    service.connect(config, effectiveSecret)
+                    service.connect(config, secret, trustUnknownHostKey)
                     SshNotifier.info(project, "Connected to ${config.username}@${config.host}")
+                } catch (e: UnknownHostKeyException) {
+                    ApplicationManager.getApplication().invokeLater({
+                        if (confirmHostKey(project, e.prompt)) connect(config, secret, trustUnknownHostKey = true)
+                    }, project.disposed)
                 } catch (e: Exception) {
                     SshNotifier.error(project, e.message ?: "Connection failed.")
                 }

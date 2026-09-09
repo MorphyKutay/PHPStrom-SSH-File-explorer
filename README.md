@@ -53,9 +53,24 @@ above, then restart the IDE.
 
 ## Notes
 
-- Unknown host keys are added to `~/.ssh/known_hosts` on first connect using the
-  `accept-new` policy.
+- An unknown host key is never accepted silently: the connection is aborted, the
+  fingerprint is shown in a confirmation dialog, and only after you accept it is
+  the key written to `~/.ssh/known_hosts`. The same happens when a known key
+  changed, which is what a man-in-the-middle would look like.
 - Remote files are mirrored into the IDE system directory:
   `<IDE system dir>/ssh-file-explorer/<connection-id>/<remote path>`
 - If the connection is gone when you save, the file stays local only and the
   plugin shows an error notification instead of failing silently.
+
+## Verifying before a Marketplace upload
+
+```bash
+./gradlew verifyPlugin
+```
+
+## License
+
+GNU General Public License v3.0 — see [LICENSE](LICENSE).
+
+Bundled third-party code: [mwiede/jsch](https://github.com/mwiede/jsch) 2.28.7,
+BSD-3-Clause.

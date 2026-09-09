@@ -35,11 +35,15 @@ class SshConnectionService(private val project: Project) : Disposable {
         com.intellij.openapi.util.Disposer.register(parent) { listeners.remove(listener) }
     }
 
-    fun connect(config: SshConnectionConfig, secret: String?) {
+    /**
+     * @param trustUnknownHostKey forwarded to [SftpClient.connect]; only `true` after the
+     *   user confirmed the fingerprint of an [UnknownHostKeyException].
+     */
+    fun connect(config: SshConnectionConfig, secret: String?, trustUnknownHostKey: Boolean = false) {
         disconnect()
         val newClient = SftpClient(config)
         try {
-            newClient.connect(secret)
+            newClient.connect(secret, trustUnknownHostKey)
         } catch (e: Throwable) {
             newClient.disconnect()
             throw e
