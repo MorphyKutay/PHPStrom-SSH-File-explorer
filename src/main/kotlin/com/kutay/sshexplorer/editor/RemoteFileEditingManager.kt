@@ -1,3 +1,6 @@
+// SSH File Explorer — Copyright (C) 2026 Kutay Aydogdu
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package com.kutay.sshexplorer.editor
 
 import com.intellij.openapi.application.ApplicationManager
