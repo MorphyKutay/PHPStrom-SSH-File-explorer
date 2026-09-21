@@ -101,7 +101,9 @@ class SshExplorerPanel(private val project: Project) : SimpleToolWindowPanel(tru
         val actionGroup = buildActionGroup()
         val toolbar = ActionManager.getInstance().createActionToolbar("SshExplorerToolbar", actionGroup, true)
         toolbar.targetComponent = this
-        setToolbar(toolbar.component)
+        val paddedToolbar = JBUI.Panels.simplePanel(toolbar.component)
+            .withBorder(JBUI.Borders.empty(4, 8))
+        setToolbar(paddedToolbar)
 
         PopupHandler.installPopupMenu(tree, buildContextMenuGroup(), "SshExplorerPopup")
 

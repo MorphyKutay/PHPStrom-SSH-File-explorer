@@ -25,7 +25,7 @@ Requires JDK 21. The Gradle wrapper is 9.7.1 and Kotlin is 2.4.20 — PhpStorm
 ./gradlew buildPlugin
 ```
 
-Output: `build/distributions/ssh-file-explorer-1.0.0.zip`
+Output: `build/distributions/ssh-file-explorer-1.0.1.zip`
 
 `localIdePath` in `gradle.properties` points at the installed PhpStorm
 (`/snap/phpstorm/current`). Leave it empty and Gradle downloads PhpStorm 2026.2
