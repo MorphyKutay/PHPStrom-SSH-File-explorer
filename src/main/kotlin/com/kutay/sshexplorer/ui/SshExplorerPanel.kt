@@ -21,9 +21,11 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.ui.ColoredTreeCellRenderer
+import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.TreeUIHelper
+import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.treeStructure.Tree
@@ -38,11 +40,14 @@ import com.kutay.sshexplorer.ssh.SshConnectionService
 import com.kutay.sshexplorer.ssh.SshNotifier
 import com.kutay.sshexplorer.ssh.UnknownHostKeyException
 import java.awt.BorderLayout
+import java.awt.Dimension
+import java.awt.Point
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.io.File
+import javax.swing.JList
 import javax.swing.JTree
 import javax.swing.event.TreeExpansionEvent
 import javax.swing.event.TreeExpansionListener
@@ -356,19 +361,41 @@ class SshExplorerPanel(private val project: Project) : SimpleToolWindowPanel(tru
         }
 
         val items = configs.map { it.displayName } + MANAGE_ENTRY
-        val popup = com.intellij.openapi.ui.popup.JBPopupFactory.getInstance()
+        val popupBuilder = com.intellij.openapi.ui.popup.JBPopupFactory.getInstance()
             .createPopupChooserBuilder(items)
-            .setTitle("Connect To")
-            .setItemChosenCallback { chosen ->
-                if (chosen == MANAGE_ENTRY) {
-                    val dialog = ConnectionListDialog(project)
-                    if (dialog.showAndGet()) dialog.selectedConfig?.let(::connect)
-                } else {
-                    configs.firstOrNull { it.displayName == chosen }?.let(::connect)
-                }
+            .setTitle("Connect to Server")
+            .setMinSize(Dimension(JBUI.scale(230), JBUI.scale(104)))
+            .setRequestFocus(true)
+            .setResizable(false)
+            .setMovable(false)
+        popupBuilder.setRenderer(object : ColoredListCellRenderer<String>() {
+            override fun customizeCellRenderer(
+                list: JList<out String>,
+                value: String,
+                index: Int,
+                selected: Boolean,
+                hasFocus: Boolean,
+            ) {
+                ipad = JBUI.insets(4, 8)
+                icon = if (value == MANAGE_ENTRY) AllIcons.General.Settings else AllIcons.General.Web
+                append(
+                    value,
+                    if (value == MANAGE_ENTRY) SimpleTextAttributes.GRAYED_ATTRIBUTES
+                    else SimpleTextAttributes.REGULAR_ATTRIBUTES,
+                )
             }
-            .createPopup()
-        popup.showUnderneathOf(toolbar ?: this)
+        })
+        popupBuilder.setItemChosenCallback { chosen ->
+            if (chosen == MANAGE_ENTRY) {
+                val dialog = ConnectionListDialog(project)
+                if (dialog.showAndGet()) dialog.selectedConfig?.let(::connect)
+            } else {
+                configs.firstOrNull { it.displayName == chosen }?.let(::connect)
+            }
+        }
+        val popup = popupBuilder.createPopup()
+        val anchor = toolbar ?: this
+        popup.show(RelativePoint(anchor, Point(JBUI.scale(16), anchor.height + JBUI.scale(8))))
     }
 
     private fun connect(config: SshConnectionConfig) {

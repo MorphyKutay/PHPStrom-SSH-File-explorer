@@ -17,7 +17,8 @@
     <change-notes><![CDATA[
         <b>1.0.1</b>
         <ul>
-            <li>Added comfortable spacing around the SSH Explorer toolbar.</li>
+            <li>Improved spacing around the SSH Explorer toolbar and connection popup.</li>
+            <li>Refined the connection chooser layout with clearer labels, spacing and icons.</li>
         </ul>
         <br/>
         <b>1.0.0</b>
